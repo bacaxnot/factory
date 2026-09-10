@@ -1,0 +1,219 @@
+#!/usr/bin/env bash
+# The factory's command line. Run `factory --help`.
+set -euo pipefail
+
+# shellcheck disable=SC1091
+[ -r /etc/factory/factory.env ] && source /etc/factory/factory.env
+FACTORY_USER="${FACTORY_USER:-factory}"
+FACTORY_HOME="$(getent passwd "$FACTORY_USER" | cut -d: -f6)"
+FACTORY_REPO="${FACTORY_REPO:-$FACTORY_HOME/work/factory}"
+export PATH="$FACTORY_HOME/.npm-global/bin:$FACTORY_HOME/.local/bin:$FACTORY_HOME/.bun/bin:$PATH"
+CS="$FACTORY_HOME/.local/bin/cswap"
+CLAUDE="$FACTORY_HOME/.local/bin/claude"
+BUN="$FACTORY_HOME/.bun/bin/bun"
+STATE_DIR=/var/lib/factory
+MODE_FILE="$STATE_DIR/mode"
+
+as_user() {
+  if [ "$(id -un)" = "$FACTORY_USER" ]; then "$@"
+  else sudo -u "$FACTORY_USER" HOME="$FACTORY_HOME" PATH="$PATH" "$@"; fi
+}
+die() { echo "factory: $*" >&2; exit 1; }
+current_mode() { cat "$MODE_FILE" 2>/dev/null || echo fable; }
+
+help_root() { cat <<'H'
+usage: factory <command> [args]
+
+  status                    what the box is doing: mode, active account, services, sessions
+  claude ...                the Claude accounts and their rotation (factory claude --help)
+  update                    pull the repo, re-run the installer, update Claude Code and
+                            claude-swap, sweep worktrees, and push a note through ntfy
+
+  factory --help            this text
+H
+}
+help_claude() { cat <<'H'
+usage: factory claude <command> [args]
+
+  mode [fable|any]          show or set which usage windows drive the rotation
+  account ...               list, switch or re-login the accounts (factory claude account --help)
+H
+}
+help_mode() { cat <<'H'
+usage: factory claude mode [fable|any]
+
+  fable   rotate when the 5h, weekly or Fable weekly window of the active account
+          nears its limit, and never land on an account whose Fable is spent (default)
+  any     rotate on the 5h and weekly windows only; use when working with other models
+
+Without an argument, shows the current mode. Changing it restarts the rotation
+service and jumps to the account with the most headroom under the new rule.
+H
+}
+help_account() { cat <<'H'
+usage: factory claude account <command> [args]
+
+  list                      every account with its 5h, weekly and Fable usage
+  switch                    rotate to the account with the most headroom
+  switch <N|email>          make that account active for every session on the box
+  login <N>                 re-login an account whose token expired (needs a terminal;
+                            prints a URL to open, then asks for the code)
+
+A forced switch holds until the rotation service decides otherwise: in fable
+mode, landing on an account with Fable at 100% is undone within a minute.
+Use `factory claude mode any` first if that is what you want.
+H
+}
+
+cmd_status() {
+  echo "mode:      $(current_mode)"
+  as_user "$CS" status 2>/dev/null | head -1 | sed 's/^Status: /active:    /'
+  for u in cswap-auto factory-alerts.timer factory-update.timer; do
+    printf 'service:   %-22s %s\n' "$u" "$(systemctl is-active "$u" || true)"
+  done
+  echo "sessions:  $(as_user tmux list-sessions -F '#S (#{session_windows} windows)' 2>/dev/null | paste -sd, - || echo none)"
+  echo "tailscale: $(tailscale ip -4 2>/dev/null || echo down)"
+}
+
+cmd_mode() {
+  case "${1:-}" in
+    "") echo "mode: $(current_mode)"; as_user "$CS" config | grep autoswitch.model ;;
+    fable)
+      as_user "$CS" config set autoswitch.model Fable >/dev/null
+      echo fable | sudo tee "$MODE_FILE" >/dev/null
+      sudo systemctl restart cswap-auto
+      as_user "$CS" switch --strategy best --model Fable | tail -1
+      echo "mode: fable" ;;
+    any)
+      as_user "$CS" config unset autoswitch.model >/dev/null
+      echo any | sudo tee "$MODE_FILE" >/dev/null
+      sudo systemctl restart cswap-auto
+      as_user "$CS" switch --strategy best | tail -1
+      echo "mode: any" ;;
+    -h|--help) help_mode ;;
+    *) die "unknown mode '$1' (fable or any)" ;;
+  esac
+}
+
+cmd_account() {
+  case "${1:-}" in
+    list) as_user "$CS" list ;;
+    switch)
+      shift
+      if [ $# -eq 0 ]; then
+        if [ "$(current_mode)" = fable ]; then as_user "$CS" switch --strategy best --model Fable
+        else as_user "$CS" switch --strategy best; fi
+      else as_user "$CS" switch "$1"; fi ;;
+    login)
+      [ -n "${2:-}" ] || die "which account? factory claude account login <N>"
+      [ -t 0 ] || die "login needs a terminal"
+      as_user "$CS" switch "$2" >/dev/null
+      as_user "$CLAUDE" auth login
+      as_user "$CS" add
+      as_user "$CS" switch --strategy best --model "$( [ "$(current_mode)" = fable ] && echo Fable || echo none )" | tail -1 ;;
+    -h|--help|"") help_account ;;
+    *) die "unknown account command '$1' (see factory claude account --help)" ;;
+  esac
+}
+
+cmd_claude() {
+  case "${1:-}" in
+    mode) shift; cmd_mode "$@" ;;
+    account|accounts) shift; cmd_account "$@" ;;
+    -h|--help|"") help_claude ;;
+    *) die "unknown claude command '$1' (see factory claude --help)" ;;
+  esac
+}
+
+# The weekly update. Runs as root; re-executes itself through sudo otherwise.
+# Every step records its failure and the run carries on, so the note lists everything at once.
+cmd_update() {
+  [ "$(id -u)" = 0 ] || exec sudo "$0" update
+  [ -n "${NTFY_TOPIC:-}" ] || die "NTFY_TOPIC is not set in /etc/factory/factory.env"
+  local problems=() step
+  local claude_before cswap_before claude_after cswap_after accounts disk
+
+  claude_before=$(claude_version)
+  cswap_before=$(cswap_version)
+
+  step="git pull in $FACTORY_REPO"
+  echo "factory update: $step"
+  if [ -d "$FACTORY_REPO/.git" ]; then
+    as_user git -C "$FACTORY_REPO" pull --ff-only || problems+=("$step failed")
+  else
+    problems+=("$FACTORY_REPO is not a git checkout")
+  fi
+
+  step="install.sh"
+  echo "factory update: $step"
+  if [ -f "$FACTORY_REPO/install.sh" ]; then
+    bash "$FACTORY_REPO/install.sh" || problems+=("$step failed")
+  else
+    problems+=("$FACTORY_REPO/install.sh is missing")
+  fi
+
+  step="claude update"
+  echo "factory update: $step"
+  as_user "$CLAUDE" update || problems+=("$step failed")
+
+  step="cswap upgrade"
+  echo "factory update: $step"
+  as_user "$CS" upgrade || problems+=("$step failed")
+
+  claude_after=$(claude_version)
+  cswap_after=$(cswap_version)
+
+  step="cswap list --json"
+  echo "factory update: verify $step"
+  accounts="no accounts"
+  local json
+  if json=$(as_user "$CS" list --json 2>/dev/null) && jq -e '.accounts' <<<"$json" >/dev/null 2>&1; then
+    local total ok
+    total=$(jq '.accounts | length' <<<"$json")
+    ok=$(jq '[.accounts[] | select(.usageStatus == "ok")] | length' <<<"$json")
+    accounts="$ok of $total accounts read usage"
+    [ "$ok" = "$total" ] || problems+=("$accounts: $(jq -r '[.accounts[] | select(.usageStatus != "ok") | "\(.number) \(.usageStatus)"] | join(", ")' <<<"$json")")
+  else
+    problems+=("$step failed after the update")
+  fi
+
+  local dir
+  for dir in "$FACTORY_HOME"/work/*/; do
+    [ -f "$dir/package.json" ] || continue
+    jq -e '.scripts["worktrees:sweep"]' "$dir/package.json" >/dev/null 2>&1 || continue
+    step="worktrees:sweep in ${dir%/}"
+    echo "factory update: $step"
+    (cd "$dir" && as_user "$BUN" run worktrees:sweep) || problems+=("$step failed")
+  done
+
+  disk=$(du -sh "$FACTORY_HOME/work" 2>/dev/null | cut -f1 || echo unknown)
+  local body
+  body=$(printf 'claude %s -> %s\ncswap %s -> %s\n%s\nwork: %s used' \
+    "$claude_before" "$claude_after" "$cswap_before" "$cswap_after" "$accounts" "$disk")
+
+  if [ ${#problems[@]} -eq 0 ]; then
+    notify white_check_mark default "update done"$'\n'"$body"
+    echo "$body"
+    return 0
+  fi
+  notify warning high "update failed"$'\n'"$(printf '%s\n' "${problems[@]}")"$'\n'"$body"
+  printf '%s\n' "${problems[@]}" "$body" >&2
+  return 1
+}
+
+claude_version() { local v; v=$(as_user "$CLAUDE" --version 2>/dev/null | awk 'NR==1{print $1}'); echo "${v:-unknown}"; }
+cswap_version() { local v; v=$(as_user "$CS" --version 2>/dev/null | awk 'NR==1{print $2}'); echo "${v:-unknown}"; }
+notify() { curl -fsS -H "Title: the factory" -H "Tags: $1" -H "Priority: $2" -d "$3" "https://ntfy.sh/$NTFY_TOPIC" >/dev/null || true; }
+
+main() {
+  case "${1:-}" in
+    status) cmd_status ;;
+    claude) shift; cmd_claude "$@" ;;
+    update) cmd_update ;;
+    -h|--help|"") help_root ;;
+    *) die "unknown command '$1' (see factory --help)" ;;
+  esac
+}
+
+# Everything is read before main runs, so `factory update` may replace this file while it executes.
+main "$@"; exit $?

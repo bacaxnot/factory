@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# Checks the factory's health and pushes a notification through ntfy when something needs a human.
+# Alerts: a service is down, an account's login is broken, or every account is out of Fable usage.
+# A temporarily unreadable usage figure is not an alert; the last known figure is used instead.
+# Runs as root from factory-alerts.timer.
+set -uo pipefail
+
+# settings come from factory.env; alerts.env is read first so a box that only has it keeps working
+# shellcheck disable=SC1091
+[ -r /etc/factory/alerts.env ] && source /etc/factory/alerts.env
+# shellcheck disable=SC1091
+[ -r /etc/factory/factory.env ] && source /etc/factory/factory.env
+FACTORY_USER="${FACTORY_USER:-factory}"
+FACTORY_HOME="$(getent passwd "$FACTORY_USER" | cut -d: -f6)"
+CSWAP="$FACTORY_HOME/.local/bin/cswap"
+STATE_DIR=/var/lib/factory
+STATE="$STATE_DIR/alerts.state"
+install -d -m 755 "$STATE_DIR"
+problems=()
+
+if [ -z "${NTFY_TOPIC:-}" ]; then
+  echo "factory-alerts: NTFY_TOPIC is not set in /etc/factory/factory.env" >&2
+  exit 1
+fi
+
+for unit in cswap-auto; do
+  systemctl is-active --quiet "$unit" || problems+=("service $unit is down")
+done
+
+json=$(sudo -u "$FACTORY_USER" HOME="$FACTORY_HOME" "$CSWAP" list --json 2>/dev/null) || problems+=("cswap list failed")
+if [ -n "${json:-}" ]; then
+  while IFS=$'\t' read -r n email status; do
+    case "$status" in ok|unavailable) ;; *) problems+=("account $n ($email) needs attention: $status") ;; esac
+  done < <(jq -r '.accounts[] | [.number, .email, .usageStatus] | @tsv' <<<"$json")
+  # remember each account's last known Fable figure, and use it while its usage is unreadable
+  usable=0
+  while IFS=$'\t' read -r n pct reset; do
+    known="$STATE_DIR/fable.$n"
+    if [ -n "$pct" ]; then printf '%s\t%s\n' "$pct" "$reset" > "$known"
+    elif [ -s "$known" ]; then IFS=$'\t' read -r pct reset < "$known"
+    else pct=0; fi
+    [ "${pct%.*}" -lt 100 ] && usable=$((usable+1))
+  done < <(jq -r '.accounts[] | [.number, ((.usage.scoped[]? | select(.name=="Fable") | .pct) // null), ((.usage.scoped[]? | select(.name=="Fable") | .resetsAt) // "")] | @tsv' <<<"$json")
+  if [ "$usable" = "0" ] && [ "$(cat "$STATE_DIR/mode" 2>/dev/null)" != "any" ]; then
+    next=$(cat "$STATE_DIR"/fable.* 2>/dev/null | cut -f2 | grep . | sort | head -1 | cut -c1-16)
+    problems+=("all accounts out of Fable usage, next reset $next")
+  fi
+fi
+
+msg=$(printf '%s\n' "${problems[@]:-}")
+now=$(date +%s)
+last_msg=""; last_ts=0
+[ -s "$STATE" ] && { last_msg=$(sed -n '2,$p' "$STATE"); last_ts=$(sed -n 1p "$STATE"); }
+
+notify() { curl -fsS -H "Title: the factory" -H "Tags: $1" -H "Priority: $2" -d "$3" "https://ntfy.sh/$NTFY_TOPIC" >/dev/null; }
+
+if [ ${#problems[@]} -eq 0 ]; then
+  if [ -n "$last_msg" ]; then
+    notify white_check_mark default "all clear"
+    : > "$STATE"
+  fi
+  exit 0
+fi
+
+# a new problem is pushed at once; an unchanged one is repeated every six hours
+if [ "$msg" != "$last_msg" ] || [ $((now - last_ts)) -ge 21600 ]; then
+  notify warning high "$msg"
+  printf '%s\n%s\n' "$now" "$msg" > "$STATE"
+fi

@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# One-line summary of the active account for the tmux status bar, cached for five minutes.
+# Runs as the factory user, from the tmux status line.
+cache=/tmp/cswap-status.cache
+cswap="$HOME/.local/bin/cswap"
+if [ ! -f "$cache" ] || [ $(( $(date +%s) - $(stat -c %Y "$cache") )) -gt 300 ]; then
+  "$cswap" list --json 2>/dev/null | jq -r '
+    .accounts[] | select(.active) |
+    "acct \(.number)  5h \(.usage.fiveHour.pct|floor)%  fable \((.usage.scoped[]? | select(.name=="Fable") | .pct | floor) // "?")%"
+  ' > "$cache.tmp" 2>/dev/null && mv "$cache.tmp" "$cache"
+fi
+cat "$cache" 2>/dev/null
