@@ -1,0 +1,14 @@
+[Unit]
+Description=claude-swap: rotate Claude accounts before their limits
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=@USER@
+Environment=HOME=@HOME@
+ExecStart=@HOME@/.local/bin/cswap auto --json --threshold 90
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

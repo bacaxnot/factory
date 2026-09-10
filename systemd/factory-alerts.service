@@ -1,0 +1,6 @@
+[Unit]
+Description=Factory health check with ntfy push
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/factory-alerts

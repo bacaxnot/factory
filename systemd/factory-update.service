@@ -1,0 +1,8 @@
+[Unit]
+Description=Factory weekly update: repo, installer, Claude Code, claude-swap, worktree sweep
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/factory update
