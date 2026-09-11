@@ -54,7 +54,7 @@ Connect over Tailscale, attach to tmux, and work as the shared user:
 
 ```bash
 ssh factory@<tailscale name>
-tmux new -A -s main
+tmux new -A -s work
 claude
 ```
 
@@ -78,7 +78,7 @@ In `~/.zshrc` or `~/.bashrc`:
 # the factory: with no arguments, ssh in and attach to the shared tmux session;
 # with arguments, run that factory command on the box (try: factory --help)
 factory() {
-  if [ $# -eq 0 ]; then ssh -t the-factory "tmux new -A -s main"
+  if [ $# -eq 0 ]; then ssh -t the-factory "tmux new -A -s work"
   else ssh -t the-factory factory "$@"; fi
 }
 ```
