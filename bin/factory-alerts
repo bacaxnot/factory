@@ -30,7 +30,13 @@ done
 json=$(sudo -u "$FACTORY_USER" HOME="$FACTORY_HOME" "$CSWAP" list --json 2>/dev/null) || problems+=("cswap list failed")
 if [ -n "${json:-}" ]; then
   while IFS=$'\t' read -r n email status; do
-    case "$status" in ok|unavailable) ;; *) problems+=("account $n ($email) needs attention: $status") ;; esac
+    # ok, a temporarily unreadable figure, and an access token waiting for its next use to refresh
+    # are all fine. A dead refresh token, missing credentials, or a credential that belongs to
+    # another account need a person: `factory claude account login <N>`.
+    case "$status" in
+      ok|unavailable|token_expired) ;;
+      *) problems+=("account $n ($email) needs attention: $status") ;;
+    esac
   done < <(jq -r '.accounts[] | [.number, .email, .usageStatus] | @tsv' <<<"$json")
   # remember each account's last known Fable figure, and use it while its usage is unreadable
   usable=0
