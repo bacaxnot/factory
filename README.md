@@ -60,6 +60,31 @@ claude
 
 The tmux status bar shows the active account with its 5-hour and Fable usage. Every session on the box shares the active account; claude-swap moves all of them together.
 
+### From your own machine
+
+An SSH host entry and one shell function make the box a single word. In `~/.ssh/config`:
+
+```
+Host the-factory
+  HostName <tailscale address>
+  User factory
+  IdentityFile ~/.ssh/<your key>
+  IdentitiesOnly yes
+```
+
+In `~/.zshrc` or `~/.bashrc`:
+
+```bash
+# the factory: with no arguments, ssh in and attach to the shared tmux session;
+# with arguments, run that factory command on the box (try: factory --help)
+factory() {
+  if [ $# -eq 0 ]; then ssh -t the-factory "tmux new -A -s main"
+  else ssh -t the-factory factory "$@"; fi
+}
+```
+
+Then `factory` attaches to the session, `factory status` or `factory claude account list` runs on the box, and `Ctrl-b d` detaches with everything still running. Windows ships OpenSSH, so the same host entry works from PowerShell; the function is for bash and zsh.
+
 ```bash
 factory status                         # mode, active account, services, sessions, tailscale address
 factory claude account list            # every account with its 5h, weekly and Fable usage
