@@ -67,7 +67,7 @@ install_packages() {
   export DEBIAN_FRONTEND=noninteractive
   log "apt packages"
   apt-get update -qq
-  apt-get install -y -qq curl ca-certificates git jq unzip tmux ufw unattended-upgrades >/dev/null
+  apt-get install -y -qq curl ca-certificates git jq unzip tmux zsh ufw unattended-upgrades >/dev/null
 
   if ! command -v node >/dev/null 2>&1 || [ "$(node --version | cut -d. -f1)" != "v22" ]; then
     log "node 22 from nodesource"
@@ -154,6 +154,24 @@ install_user_tools() {
   done
 }
 
+install_shell() {
+  log "zsh, oh-my-zsh and its plugins"
+  local omz="$FACTORY_HOME/.oh-my-zsh"
+  if [ ! -d "$omz" ]; then
+    as_user git clone -q --depth 1 https://github.com/ohmyzsh/ohmyzsh.git "$omz"
+  fi
+  local plugin
+  for plugin in zsh-autosuggestions zsh-syntax-highlighting; do
+    if [ ! -d "$omz/custom/plugins/$plugin" ]; then
+      as_user git clone -q --depth 1 "https://github.com/zsh-users/$plugin.git" "$omz/custom/plugins/$plugin"
+    fi
+  done
+  install -o "$FACTORY_USER" -g "$FACTORY_USER" -m 644 "$REPO_DIR/home/zshrc" "$FACTORY_HOME/.zshrc"
+  if [ "$(getent passwd "$FACTORY_USER" | cut -d: -f7)" != "$(command -v zsh)" ]; then
+    chsh -s "$(command -v zsh)" "$FACTORY_USER"
+  fi
+}
+
 install_home_files() {
   log "tmux and Claude settings"
   install -o "$FACTORY_USER" -g "$FACTORY_USER" -m 644 "$REPO_DIR/home/tmux.conf" "$FACTORY_HOME/.tmux.conf"
@@ -213,6 +231,7 @@ main() {
   install_packages
   configure_system
   install_user_tools
+  install_shell
   install_home_files
   install_scripts
   install_services

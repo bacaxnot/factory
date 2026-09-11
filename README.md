@@ -48,6 +48,10 @@ Two things stay manual, and the installer prints them:
 
 A repo path other than `/home/factory/work/factory` works the same way; the installer records wherever it runs from. A user other than `factory` comes from `FACTORY_USER` in `/etc/factory/factory.env`; set it before the first run, and clone the repo under that user's home.
 
+## Shell
+
+The shared user's login shell is zsh with oh-my-zsh, the robbyrussell theme, and the git, zsh-autosuggestions and zsh-syntax-highlighting plugins, from `home/zshrc`. The installer owns that file; personal additions go in `~/.zshrc.local`, which it sources. Bash stays installed for scripts.
+
 ## Browsers
 
 The installer sets `AGENT_BROWSER_ARGS="--no-sandbox"` for the shared user, which a headless Chromium needs on a VM. The browsers themselves are installed per project: `npm install -g agent-browser` for an agent-driven browser, and `bunx playwright install --with-deps chromium` in a checkout whose tests use Playwright.

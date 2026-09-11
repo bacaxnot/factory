@@ -1,0 +1,15 @@
+# The shared user's zsh on the factory: oh-my-zsh with the same theme and plugins the team
+# uses on their laptops. The installer keeps this file in place; put personal one-offs in
+# ~/.zshrc.local, which this file sources when it exists.
+export ZSH="$HOME/.oh-my-zsh"
+ZSH_THEME="robbyrussell"
+plugins=(git zsh-autosuggestions zsh-syntax-highlighting)
+source "$ZSH/oh-my-zsh.sh"
+
+export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:$HOME/.bun/bin:$PATH"
+export BUN_INSTALL="$HOME/.bun"
+[ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"
+# a headless Chromium on a VM needs the sandbox off; agent-browser reads its launch flags here
+export AGENT_BROWSER_ARGS="--no-sandbox"
+
+[ -f "$HOME/.zshrc.local" ] && source "$HOME/.zshrc.local"
