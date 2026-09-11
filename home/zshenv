@@ -1,0 +1,5 @@
+# Read by every zsh, interactive or not, so scripts run over ssh find the tools too.
+export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:$HOME/.bun/bin:$PATH"
+export BUN_INSTALL="$HOME/.bun"
+# a headless Chromium on a VM needs the sandbox off; agent-browser reads its launch flags here
+export AGENT_BROWSER_ARGS="--no-sandbox"

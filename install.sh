@@ -167,6 +167,7 @@ install_shell() {
     fi
   done
   install -o "$FACTORY_USER" -g "$FACTORY_USER" -m 644 "$REPO_DIR/home/zshrc" "$FACTORY_HOME/.zshrc"
+  install -o "$FACTORY_USER" -g "$FACTORY_USER" -m 644 "$REPO_DIR/home/zshenv" "$FACTORY_HOME/.zshenv"
   if [ "$(getent passwd "$FACTORY_USER" | cut -d: -f7)" != "$(command -v zsh)" ]; then
     chsh -s "$(command -v zsh)" "$FACTORY_USER"
   fi
