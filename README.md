@@ -84,7 +84,7 @@ In `~/.zshrc` or `~/.bashrc`:
 factory() {
   case "${1:-}" in
     "") ssh -t the-factory "tmux new -A -s work" ;;
-    tunnel) local port="${2:-3000}"; echo "http://localhost:$port -> the factory, Ctrl-C to stop"; ssh -N -L "$port:localhost:$port" the-factory ;;
+    tunnel) local port="${2:-3000}"; echo "http://localhost:$port -> the factory, Ctrl-C to stop"; ssh -N -L "${port}:localhost:${port}" the-factory ;;
     *) ssh -t the-factory factory "$@" ;;
   esac
 }
