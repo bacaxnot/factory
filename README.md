@@ -75,15 +75,18 @@ Host the-factory
 In `~/.zshrc` or `~/.bashrc`:
 
 ```bash
-# the factory: with no arguments, ssh in and attach to the shared tmux session;
-# with arguments, run that factory command on the box (try: factory --help)
+# the factory: no arguments attaches to the shared tmux session; `factory tunnel [port]`
+# forwards a dev server on the box to localhost; anything else runs as a factory command there
 factory() {
-  if [ $# -eq 0 ]; then ssh -t the-factory "tmux new -A -s work"
-  else ssh -t the-factory factory "$@"; fi
+  case "${1:-}" in
+    "") ssh -t the-factory "tmux new -A -s work" ;;
+    tunnel) local port="${2:-3000}"; echo "http://localhost:$port -> the factory, Ctrl-C to stop"; ssh -N -L "$port:localhost:$port" the-factory ;;
+    *) ssh -t the-factory factory "$@" ;;
+  esac
 }
 ```
 
-Then `factory` attaches to the session, `factory status` or `factory claude account list` runs on the box, and `Ctrl-b d` detaches with everything still running. Windows ships OpenSSH, so the same host entry works from PowerShell; the function is for bash and zsh.
+Then `factory` attaches to the session, `factory status` or `factory claude account list` runs on the box, and `Ctrl-b d` detaches with everything still running. `factory tunnel` forwards port 3000 so a dev server running on the box opens at `http://localhost:3000` in your browser, with its own `APP_URL` still correct; `factory tunnel 3991` does the same for a worktree's port. Windows ships OpenSSH, so the same host entry works from PowerShell; the function is for bash and zsh.
 
 ```bash
 factory status                         # mode, active account, services, sessions, tailscale address
