@@ -142,10 +142,14 @@ install_user_tools() {
   fi
 
   local path_line='export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:$HOME/.bun/bin:$PATH"'
-  local rc
+  # a headless Chromium on a VM needs the sandbox off; agent-browser reads its launch flags here
+  local browser_line='export AGENT_BROWSER_ARGS="--no-sandbox"'
+  local rc line
   for rc in "$FACTORY_HOME/.profile" "$FACTORY_HOME/.bashrc"; do
     touch "$rc"
-    grep -qxF "$path_line" "$rc" || printf '\n%s\n' "$path_line" >> "$rc"
+    for line in "$path_line" "$browser_line"; do
+      grep -qxF "$line" "$rc" || printf '\n%s\n' "$line" >> "$rc"
+    done
     chown "$FACTORY_USER:$FACTORY_USER" "$rc"
   done
 }
