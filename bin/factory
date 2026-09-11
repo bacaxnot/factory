@@ -186,6 +186,10 @@ cmd_update() {
     (cd "$dir" && as_user "$BUN" run worktrees:sweep) || problems+=("$step failed")
   done
 
+  step="prune pastes older than 14 days"
+  echo "factory update: $step"
+  find "$FACTORY_HOME/paste" -type f -mtime +14 -delete 2>/dev/null || true
+
   disk=$(du -sh "$FACTORY_HOME/work" 2>/dev/null | cut -f1 || echo unknown)
   local body
   body=$(printf 'claude %s -> %s\ncswap %s -> %s\n%s\nwork: %s used' \
