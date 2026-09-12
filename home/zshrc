@@ -6,6 +6,9 @@ ZSH_THEME="robbyrussell"
 plugins=(git zsh-autosuggestions zsh-syntax-highlighting)
 source "$ZSH/oh-my-zsh.sh"
 
+# A worktree's folder and branch carry the same task name; the prompt caps both.
+PROMPT='%(?:%{$fg_bold[green]%}➜ :%{$fg_bold[red]%}➜ ) %{$fg[cyan]%}%24>…>%c%<<%{$reset_color%} %32>…>$(git_prompt_info)%<<'
+
 [ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"
 
 [ -f "$HOME/.zshrc.local" ] && source "$HOME/.zshrc.local"
