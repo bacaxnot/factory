@@ -52,6 +52,10 @@ A repo path other than `/home/factory/work/factory` works the same way; the inst
 
 The shared user's login shell is zsh with oh-my-zsh, the robbyrussell theme, and the git, zsh-autosuggestions and zsh-syntax-highlighting plugins, from `home/zshrc`. The installer owns that file; personal additions go in `~/.zshrc.local`, which it sources. Bash stays installed for scripts.
 
+## Orca
+
+[Orca](https://www.onorca.dev) can drive the box as an SSH host: worktrees, agents and terminals run on the box, the desktop app on your machine shows them, and an image on your clipboard pastes as a path on the box. Add the host from `~/.ssh/config` (`the-factory`), add the repository at its path under `~/work`, and register no Claude account in Orca: with none, Orca only reads the credentials and claude-swap stays the one tool that rotates them. Orca's agent status hooks may stay on; the installer merges the box's Claude settings over the file rather than replacing it, so the hooks survive the weekly update.
+
 ## Browsers
 
 The installer sets `AGENT_BROWSER_ARGS="--no-sandbox"` for the shared user, which a headless Chromium needs on a VM. The browsers themselves are installed per project: `npm install -g agent-browser` for an agent-driven browser, and `bunx playwright install --with-deps chromium` in a checkout whose tests use Playwright.

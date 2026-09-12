@@ -191,7 +191,14 @@ install_shell() {
 install_home_files() {
   log "tmux and Claude settings"
   install -o "$FACTORY_USER" -g "$FACTORY_USER" -m 644 "$REPO_DIR/home/tmux.conf" "$FACTORY_HOME/.tmux.conf"
-  install -o "$FACTORY_USER" -g "$FACTORY_USER" -m 644 "$REPO_DIR/home/claude-settings.json" "$FACTORY_HOME/.claude/settings.json"
+  # The repo's settings are merged over the file, so what other tools keep there stays:
+  # Orca installs the hooks and status line that show a session's state in its client.
+  local settings="$FACTORY_HOME/.claude/settings.json" merged
+  [ -s "$settings" ] || echo '{}' > "$settings"
+  merged=$(mktemp)
+  jq -s '.[0] * .[1]' "$settings" "$REPO_DIR/home/claude-settings.json" > "$merged"
+  install -o "$FACTORY_USER" -g "$FACTORY_USER" -m 644 "$merged" "$settings"
+  rm -f "$merged"
 
   # Claude Code skips its first-run questions when onboarding is marked complete
   local state="$FACTORY_HOME/.claude.json" tmp
