@@ -28,6 +28,8 @@ usage: factory <command> [args]
   claude ...                the Claude accounts and their rotation (factory claude --help)
   update                    pull the repo, re-run the installer, update Claude Code and
                             claude-swap, sweep worktrees, and push a note through ntfy
+  person ...                the people whose keys open the box, each with a git identity
+                            (factory person --help)
 
   factory --help            this text
 H
@@ -48,6 +50,20 @@ usage: factory claude mode [fable|any]
 
 Without an argument, shows the current mode. Changing it restarts the rotation
 service and jumps to the account with the most headroom under the new rule.
+H
+}
+help_person() { cat <<'H'
+usage: factory person <command> [args]
+
+  list                      every key that opens the box, with its git identity
+  add <name> <email> <key>  let a key in, or give a key that is already in its identity;
+                            commits made over that key carry the name and email
+  remove <email>            take out the key with that identity
+
+Everyone connects as the shared user, so the SSH key is what tells people apart.
+sshd sets GIT_AUTHOR_* and GIT_COMMITTER_* for a connection made with the key, and
+tmux carries them into the session that connection creates or attaches to. Use the
+GitHub noreply address, so GitHub attributes the commits.
 H
 }
 help_account() { cat <<'H'
@@ -114,6 +130,64 @@ cmd_account() {
     -h|--help|"") help_account ;;
     *) die "unknown account command '$1' (see factory claude account --help)" ;;
   esac
+}
+
+AUTHORIZED_KEYS="$FACTORY_HOME/.ssh/authorized_keys"
+
+cmd_person() {
+  local sub="${1:-list}"
+  [ $# -gt 0 ] && shift
+  case "$sub" in
+    list) person_list ;;
+    add) person_add "$@" ;;
+    remove) person_remove "$@" ;;
+    -h|--help) help_person ;;
+    *) die "unknown person command '$sub' (see factory person --help)" ;;
+  esac
+}
+
+person_list() {
+  [ -s "$AUTHORIZED_KEYS" ] || { echo "no keys"; return 0; }
+  local line name email fp
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    name=$(sed -n 's/.*GIT_AUTHOR_NAME=\([^"]*\)".*/\1/p' <<<"$line")
+    email=$(sed -n 's/.*GIT_AUTHOR_EMAIL=\([^"]*\)".*/\1/p' <<<"$line")
+    fp=$(ssh-keygen -lf /dev/stdin <<<"$line" 2>/dev/null || echo "unreadable key")
+    if [ -n "$name" ]; then printf '%s <%s>\n    %s\n' "$name" "$email" "$fp"
+    else printf 'no identity\n    %s\n' "$fp"; fi
+  done < "$AUTHORIZED_KEYS"
+}
+
+# add <name> <email> <key...>: the key may come as one argument or as its parts
+person_add() {
+  local name="${1:-}" email="${2:-}"
+  [ $# -ge 3 ] || die "usage: factory person add <name> <email> <public key>"
+  shift 2
+  local key="$*" base64
+  case "$name" in *[\",]*|"") die "the name may not be empty or contain a quote or a comma" ;; esac
+  case "$email" in *[\",\ ]*|"") die "the email may not be empty or contain a quote, a comma or a space" ;; esac
+  ssh-keygen -lf /dev/stdin <<<"$key" >/dev/null 2>&1 || die "that is not a public key"
+  base64=$(awk '{print $2}' <<<"$key")
+  local entry
+  entry=$(printf 'environment="GIT_AUTHOR_NAME=%s",environment="GIT_AUTHOR_EMAIL=%s",environment="GIT_COMMITTER_NAME=%s",environment="GIT_COMMITTER_EMAIL=%s" %s' \
+    "$name" "$email" "$name" "$email" "$key")
+  local tmp; tmp=$(mktemp)
+  if [ -s "$AUTHORIZED_KEYS" ]; then grep -vF -- "$base64" "$AUTHORIZED_KEYS" > "$tmp" || true; fi
+  echo "$entry" >> "$tmp"
+  cat "$tmp" > "$AUTHORIZED_KEYS"; rm -f "$tmp"
+  echo "$name <$email> opens the box; a new connection with that key commits as them"
+}
+
+person_remove() {
+  local email="${1:-}"
+  [ -n "$email" ] || die "usage: factory person remove <email>"
+  grep -qF -- "GIT_AUTHOR_EMAIL=$email\"" "$AUTHORIZED_KEYS" 2>/dev/null || die "no key with the identity $email"
+  local tmp; tmp=$(mktemp)
+  grep -vF -- "GIT_AUTHOR_EMAIL=$email\"" "$AUTHORIZED_KEYS" > "$tmp" || true
+  [ -s "$tmp" ] || { rm -f "$tmp"; die "that is the last key; removing it would lock the box"; }
+  cat "$tmp" > "$AUTHORIZED_KEYS"; rm -f "$tmp"
+  echo "$email no longer opens the box"
 }
 
 cmd_claude() {
@@ -214,6 +288,7 @@ main() {
     status) cmd_status ;;
     claude) shift; cmd_claude "$@" ;;
     update) cmd_update ;;
+    person) shift; cmd_person "$@" ;;
     -h|--help|"") help_root ;;
     *) die "unknown command '$1' (see factory --help)" ;;
   esac

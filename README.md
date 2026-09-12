@@ -106,7 +106,7 @@ factory() {
       [ -n "${2:-}" ] || rm -f "$file"
       printf '%s' "$remote" | pbcopy
       echo "$remote (on your clipboard: Cmd-V it into the session)" ;;
-    *) ssh -t the-factory factory "$@" ;;
+    *) ssh -t the-factory "factory $(printf '%q ' "$@")" ;;
   esac
 }
 ```
@@ -131,6 +131,18 @@ factory tunnel 3000                    # http://localhost:3000 -> the box
 factory update                         # run the weekly update now
 factory --help
 ```
+
+### People
+
+Everyone connects as the shared user, so the SSH key is what tells people apart. `factory person add` lets a key in and ties a git identity to it: sshd sets the author and committer variables for every connection made with that key, tmux carries them into the session that connection creates or attaches to, and a commit made there carries that name and email whatever the box's git config says. Use the GitHub noreply address so GitHub attributes the commits.
+
+```bash
+factory person list
+factory person add "Ada Lovelace" 123+ada@users.noreply.github.com "$(cat ada.pub)"
+factory person remove 123+ada@users.noreply.github.com
+```
+
+A session takes its identity from the connection that creates it and again from each connection that attaches, so a window opened in the shared `admin` session commits as whoever attached last. A shell that was already open when the identity was added keeps the box's git config until it is reopened.
 
 ### Rotation modes
 

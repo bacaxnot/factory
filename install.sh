@@ -112,6 +112,21 @@ EOF
   ufw --force enable >/dev/null
 }
 
+# --- sshd ------------------------------------------------------------------------------
+
+# A key in the shared user's authorized_keys carries the git identity of the person holding it
+# (`factory person add`). sshd passes those four variables into the connection and nothing else.
+configure_sshd() {
+  log "sshd"
+  local conf=/etc/ssh/sshd_config.d/10-factory.conf
+  local want='PermitUserEnvironment GIT_AUTHOR_NAME,GIT_AUTHOR_EMAIL,GIT_COMMITTER_NAME,GIT_COMMITTER_EMAIL'
+  if [ "$(cat "$conf" 2>/dev/null)" != "$want" ]; then
+    echo "$want" > "$conf"
+    sshd -t
+    systemctl reload ssh
+  fi
+}
+
 # --- tools for the shared user --------------------------------------------------------
 
 install_user_tools() {
@@ -231,6 +246,7 @@ main() {
   create_user
   install_packages
   configure_system
+  configure_sshd
   install_user_tools
   install_shell
   install_home_files
