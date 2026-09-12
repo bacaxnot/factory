@@ -66,7 +66,7 @@ tmux new -A -s <your name>
 claude
 ```
 
-Each person keeps a tmux session of their own, since two clients on one session see the same windows. The shared session `admin` holds what everyone should be able to watch: long-running loops, scheduled runs, anything a second person may need to inspect. The tmux status bar shows the active account with its 5-hour and Fable usage. Every session on the box shares the active account; claude-swap moves all of them together.
+Each person keeps a tmux session of their own, since two clients on one session see the same windows. The `admin` session group holds what everyone should be able to watch: long-running loops, scheduled runs, anything a second person may need to inspect. Joining it is `tmux new -A -s admin-<your name> -t admin`: the windows are shared, the current window is yours. The tmux status bar shows the active account with its 5-hour and Fable usage. Every session on the box shares the active account; claude-swap moves all of them together.
 
 ### From your own machine
 
@@ -83,13 +83,14 @@ Host the-factory
 In `~/.zshrc` or `~/.bashrc`:
 
 ```bash
-# the factory: no arguments attaches to your own tmux session, named after your user; `factory tmux admin`
-# attaches to a shared one; `factory paste [file]` puts an image on the box and its path on your clipboard;
-# `factory tunnel [port]` forwards a dev server on the box to localhost; anything else runs as a factory command there
+# the factory: no arguments attaches to your own tmux session, named after your user; `factory admin`
+# joins the shared admin windows through a session of your own; `factory paste [file]` puts an image on the
+# box and its path on your clipboard; `factory tunnel [port]` forwards a dev server on the box to localhost;
+# anything else runs as a factory command there
 factory() {
   case "${1:-}" in
     "") ssh -t the-factory "tmux new -A -s ${FACTORY_SESSION:-$USER}" ;;
-    tmux) ssh -t the-factory "tmux new -A -s ${2:?session name}" ;;
+    admin) ssh -t the-factory "tmux new -A -s admin-${FACTORY_SESSION:-$USER} -t admin" ;;
     tunnel) local port="${2:-3000}"; echo "http://localhost:$port -> the factory, Ctrl-C to stop"; ssh -N -L "${port}:localhost:${port}" the-factory ;;
     paste)
       local file="${2:-}" name remote
@@ -111,7 +112,7 @@ factory() {
 }
 ```
 
-Then `factory` attaches to your own tmux session, named after your user on your machine (set `FACTORY_SESSION` to pick another name), `factory tmux admin` attaches to the shared `admin` session where long-running loops live, `factory status` or `factory claude account list` runs on the box, and `Ctrl-b d` detaches with everything still running. Two people attached to one session see the same windows, so each person keeps a session of their own and shares only `admin`. `factory tunnel` forwards port 3000 so a dev server running on the box opens at `http://localhost:3000` in your browser, with its own `APP_URL` still correct; `factory tunnel 3991` does the same for a worktree's port. Windows ships OpenSSH, so the same host entry works from PowerShell; the function is for bash and zsh.
+Then `factory` attaches to your own tmux session, named after your user on your machine (set `FACTORY_SESSION` to pick another name), `factory admin` joins the shared `admin` windows where long-running loops live, `factory status` or `factory claude account list` runs on the box, and `Ctrl-b d` detaches with everything still running. `admin` is a tmux session group: each person joins it through a session of their own, so the windows are shared, a window opened or closed by one person shows for both, and each person still has their own current window. Two people only share a screen when both select the same window. `factory tunnel` forwards port 3000 so a dev server running on the box opens at `http://localhost:3000` in your browser, with its own `APP_URL` still correct; `factory tunnel 3991` does the same for a worktree's port. Windows ships OpenSSH, so the same host entry works from PowerShell; the function is for bash and zsh.
 
 Claude Code reads the clipboard of the machine it runs on, so an image on your clipboard cannot be pasted into a session directly. `factory paste` copies it to `~/paste/` on the box and puts the file's path on your clipboard; `Cmd-V` in the session pastes the path and Claude reads the image from it. `factory paste shot.png` does the same for a file. The clipboard form needs `pngpaste` (`brew install pngpaste`). The weekly update deletes pastes older than two weeks.
 
@@ -124,7 +125,7 @@ factory claude account login 2         # re-login account 2 after its token expi
 factory claude mode                    # show the rotation mode
 factory claude mode any                # rotate on the 5h and weekly windows only
 factory claude mode fable              # also rotate on the Fable window; skip accounts whose Fable is spent
-factory tmux admin                     # attach to the shared session
+factory admin                          # join the shared admin windows
 factory paste                          # clipboard image -> the box, its path on your clipboard
 factory paste shot.png                 # the same for a file
 factory tunnel 3000                    # http://localhost:3000 -> the box
@@ -142,7 +143,7 @@ factory person add "Ada Lovelace" 123+ada@users.noreply.github.com "$(cat ada.pu
 factory person remove 123+ada@users.noreply.github.com
 ```
 
-A session takes its identity from the connection that creates it and again from each connection that attaches, so a window opened in the shared `admin` session commits as whoever attached last. A shell that was already open when the identity was added keeps the box's git config until it is reopened.
+A session takes its identity from the connection that creates it and again from each connection that attaches, so a window opened in the `admin` group commits as the person who opened it. A shell that was already open when the identity was added keeps the box's git config until it is reopened.
 
 ### Rotation modes
 
