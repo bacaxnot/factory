@@ -149,6 +149,21 @@ factory person remove 123+ada@users.noreply.github.com
 
 A session takes its identity from the connection that creates it and again from each connection that attaches, so a window opened in the `admin` group commits as the person who opened it. A shell that was already open when the identity was added keeps the box's git config until it is reopened.
 
+### A new person
+
+What it takes to bring someone onto the box, in order:
+
+1. **Tailscale.** The box is reachable over the tailnet only, so their machine has to be on it: invite them to the tailnet as a user, or share the box's node with their own tailnet. Tailscale's personal plan covers a few users at no cost.
+2. **Their key and identity**, from anyone already on the box. They send their public key and the name and GitHub noreply email their commits should carry:
+   ```bash
+   factory person add "Ada Lovelace" 123+ada@users.noreply.github.com "$(cat ada.pub)"
+   ```
+3. **Their machine.** The host entry and shell function from "From your own machine", with their own key in the host entry, plus `brew install pngpaste` for `factory paste`. `factory status` from their terminal is the check.
+4. **Orca, if they use it.** Install the app, add the SSH host `the-factory`, add the repository at its path under `~/work`, set the Workspace Directory to `.worktrees`, and register no Claude account. The "Orca" section above has the reasons.
+5. **Alerts, optionally.** The ntfy topic in `/etc/factory/factory.env` on the box; subscribe to it in the ntfy app. Share it privately, it is the only secret on the box.
+
+They connect as the same user as everyone else, with the same tmux and the same Claude accounts. Their own tmux session is `factory`, the shared one is `factory admin`, and a task goes in a worktree.
+
 ### Rotation modes
 
 `cswap auto` watches the active account and switches when a usage window passes 90 percent.
