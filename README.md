@@ -116,7 +116,29 @@ factory() {
 }
 ```
 
-Then `factory` attaches to your own tmux session, named after your user on your machine (set `FACTORY_SESSION` to pick another name), `factory admin` joins the shared `admin` windows where long-running loops live, `factory status` or `factory claude account list` runs on the box, and `Ctrl-b d` detaches with everything still running. `admin` is a tmux session group: each person joins it through a session of their own, so the windows are shared, a window opened or closed by one person shows for both, and each person still has their own current window. Two people only share a screen when both select the same window. `factory tunnel` forwards port 3000 so a dev server running on the box opens at `http://localhost:3000` in your browser, with its own `APP_URL` still correct; `factory tunnel 3991` does the same for a worktree's port. Windows ships OpenSSH, so the same host entry works from PowerShell; the function is for bash and zsh.
+Then `factory` attaches to your own tmux session, named after your user on your machine (set `FACTORY_SESSION` to pick another name), `factory admin` joins the shared `admin` windows where long-running loops live, `factory status` or `factory claude account list` runs on the box, and `Ctrl-b d` detaches with everything still running. `admin` is a tmux session group: each person joins it through a session of their own, so the windows are shared, a window opened or closed by one person shows for both, and each person still has their own current window. Two people only share a screen when both select the same window. `factory tunnel` forwards port 3000 so a dev server running on the box opens at `http://localhost:3000` in your browser, with its own `APP_URL` still correct; `factory tunnel 3991` does the same for a worktree's port. Windows ships OpenSSH, so the same host entry works from PowerShell, with the function below in `$PROFILE`. It has no `paste`: on Windows, images go through Orca, which uploads them to the box on paste.
+
+```powershell
+# the factory: `factory` attaches to your own tmux session; `factory admin` joins the shared admin
+# windows; `factory tunnel [port]` forwards a dev server on the box to localhost; anything else runs
+# as a factory command there
+function factory {
+  $me = ($env:USERNAME -replace '[^A-Za-z0-9_-]', '-')
+  if ($args.Count -eq 0) { ssh -t the-factory "tmux new -A -s $me"; return }
+  switch ($args[0]) {
+    'admin'  { ssh -t the-factory "tmux new -A -s admin-$me -t admin" }
+    'tunnel' {
+      $port = if ($args.Count -gt 1) { $args[1] } else { 3000 }
+      Write-Host "http://localhost:$port -> the factory, Ctrl-C to stop"
+      ssh -N -L "${port}:localhost:${port}" the-factory
+    }
+    default {
+      $quoted = $args | ForEach-Object { "'" + ($_ -replace "'", "'\''") + "'" }
+      ssh -t the-factory "factory $($quoted -join ' ')"
+    }
+  }
+}
+```
 
 Claude Code reads the clipboard of the machine it runs on, so an image on your clipboard cannot be pasted into a session directly. `factory paste` copies it to `~/paste/` on the box and puts the file's path on your clipboard; `Cmd-V` in the session pastes the path and Claude reads the image from it. `factory paste shot.png` does the same for a file. The clipboard form needs `pngpaste` (`brew install pngpaste`). The weekly update deletes pastes older than two weeks.
 
