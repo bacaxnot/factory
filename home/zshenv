@@ -3,3 +3,6 @@ export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:$HOME/.bun/bin:$PATH"
 export BUN_INSTALL="$HOME/.bun"
 # a headless Chromium on a VM needs the sandbox off; agent-browser reads its launch flags here
 export AGENT_BROWSER_ARGS="--no-sandbox"
+# Next's telemetry flusher, spawned when a dev server stops, loads next.config.ts and runs
+# whatever that starts, then never exits. With telemetry off the flusher is never spawned.
+export NEXT_TELEMETRY_DISABLED=1
