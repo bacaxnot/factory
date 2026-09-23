@@ -70,7 +70,7 @@ tmux new -A -s <your name>
 claude
 ```
 
-Each person keeps a tmux session of their own, since two clients on one session see the same windows. The `admin` session group holds what everyone should be able to watch: long-running loops, scheduled runs, anything a second person may need to inspect. Joining it is `tmux new -A -s admin-<your name> -t admin`: the windows are shared, the current window is yours. The tmux status bar shows the active account with its 5-hour and Fable usage. Every session on the box shares the active account; claude-swap moves all of them together.
+Each client keeps a tmux session of its own, since two clients on one session see the same windows. The `admin` session group holds what is worth reaching from anywhere: long-running loops, scheduled runs, anything to look in on from a second terminal. Joining it is `tmux new -A -s admin-<your name> -t admin`: the windows are shared, the current window is yours. The tmux status bar shows the active account with its 5-hour and Fable usage. Every session on the box shares the active account; claude-swap moves all of them together.
 
 ### From your own machine
 
@@ -116,7 +116,7 @@ factory() {
 }
 ```
 
-Then `factory` attaches to your own tmux session, named after your user on your machine (set `FACTORY_SESSION` to pick another name), `factory admin` joins the shared `admin` windows where long-running loops live, `factory status` or `factory claude account list` runs on the box, and `Ctrl-b d` detaches with everything still running. `admin` is a tmux session group: each person joins it through a session of their own, so the windows are shared, a window opened or closed by one person shows for both, and each person still has their own current window. Two people only share a screen when both select the same window. `factory tunnel` forwards port 3000 so a dev server running on the box opens at `http://localhost:3000` in your browser, with its own `APP_URL` still correct; `factory tunnel 3991` does the same for a worktree's port. Windows ships OpenSSH, so the same host entry works from PowerShell, with the function below in `$PROFILE`. It has no `paste`: on Windows, images go through Orca, which uploads them to the box on paste.
+Then `factory` attaches to your own tmux session, named after your user on your machine (set `FACTORY_SESSION` to pick another name), `factory admin` joins the shared `admin` windows where long-running loops live, `factory status` or `factory claude account list` runs on the box, and `Ctrl-b d` detaches with everything still running. `admin` is a tmux session group: each client joins it through a session of its own, so the windows are shared, a window opened or closed in one shows in the rest, and each client still has its own current window. Two clients only share a screen when both select the same window. `factory tunnel` forwards port 3000 so a dev server running on the box opens at `http://localhost:3000` in your browser, with its own `APP_URL` still correct; `factory tunnel 3991` does the same for a worktree's port. Windows ships OpenSSH, so the same host entry works from PowerShell, with the function below in `$PROFILE`. It has no `paste`: on Windows, images go through Orca, which uploads them to the box on paste.
 
 ```powershell
 # the factory: `factory` attaches to your own tmux session; `factory admin` joins the shared admin
@@ -169,7 +169,7 @@ factory person add "Ada Lovelace" 123+ada@users.noreply.github.com "$(cat ada.pu
 factory person remove 123+ada@users.noreply.github.com
 ```
 
-A session takes its identity from the connection that creates it and again from each connection that attaches, so a window opened in the `admin` group commits as the person who opened it. A shell that was already open when the identity was added keeps the box's git config until it is reopened.
+A session takes its identity from the connection that creates it and again from each connection that attaches, so a window opened in the `admin` group commits as the person who opened it. A shell that was already open when the identity was added keeps the box's git config until it is reopened. `factory person remove` stops new connections with that key, and the sessions it already opened keep running, and keep committing under its name, until they are stopped.
 
 ### A new person
 
