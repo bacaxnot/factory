@@ -14,6 +14,7 @@ A multi-account Claude Code box on Ubuntu 24.04. One shared user runs Claude Cod
 | `factory-update.timer` | systemd | Runs `factory update` every Sunday at 04:00 local time |
 | `/etc/factory/factory.env` | settings | ntfy topic, shared user, repo path, timezone |
 | `/var/lib/factory/` | state | Rotation mode, alert state, last known Fable usage per account |
+| `/swapfile` | swap | 8G, so a memory spike slows the box instead of killing processes; made only when the box has no swap |
 
 The shared user (default `factory`) has passwordless sudo, Docker access, and these tools in its home: bun, Claude Code (native install), uv, claude-swap (`uv tool`), plus node 22, Docker, tmux, git, jq, and unzip system-wide. Its Claude settings select the Fable model and bypass permission prompts. Its work lives under `~/work`.
 
@@ -244,6 +245,7 @@ sudo systemctl daemon-reload
 sudo rm -f /usr/local/bin/{factory,factory-alerts,cswap-status}
 sudo rm -rf /etc/factory /var/lib/factory
 sudo rm -f /etc/sudoers.d/factory
+sudo swapoff /swapfile && sudo rm -f /swapfile && sudo sed -i '/^\/swapfile /d' /etc/fstab
 ```
 
 The shared user, its home (with the Claude credentials under `~/.claude` and claude-swap's data under `~/.local/share/claude-swap`), and the system packages (Docker, node, Tailscale, ufw) stay; remove them separately if the box is being repurposed. `sudo tailscale logout` detaches the box from the tailnet.

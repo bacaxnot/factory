@@ -98,6 +98,19 @@ APT::Periodic::Update-Package-Lists "1";
 APT::Periodic::Unattended-Upgrade "1";
 EOF
 
+  # Swap lets the kernel move idle sessions' memory to disk, so a build that spikes slows the
+  # box down rather than waking the OOM killer. A box that already has swap keeps its own.
+  if [ -z "$(swapon --show --noheadings)" ]; then
+    log "8G swapfile at /swapfile"
+    [ -f /swapfile ] || fallocate -l 8G /swapfile
+    chmod 600 /swapfile
+    mkswap /swapfile >/dev/null
+    swapon /swapfile
+  fi
+  if [ -f /swapfile ] && ! grep -q '^/swapfile ' /etc/fstab; then
+    echo '/swapfile none swap sw 0 0' >> /etc/fstab
+  fi
+
   # Incoming traffic is accepted on the Tailscale interface only. Until Tailscale is up,
   # SSH stays open on every interface so the installer cannot lock the box.
   log "ufw"
