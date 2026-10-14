@@ -72,8 +72,11 @@ usage: factory claude account <command> [args]
   list                      every account with its 5h, weekly and Fable usage
   switch                    rotate to the account with the most headroom
   switch <N|email>          make that account active for every session on the box
-  login <N>                 re-login an account whose token expired (needs a terminal;
-                            prints a URL to open, then asks for the code)
+  auth <N>                  log an account in again after its token expired (needs a
+                            terminal; prints a URL to open, then asks for the code)
+  disable <N|email>         hold an account out of rotation, keeping its slot; alerts and
+                            the weekly update stop checking it
+  enable <N|email>          return a disabled account to rotation
 
 A forced switch holds until the rotation service decides otherwise: in fable
 mode, landing on an account with Fable at 100% is undone within a minute.
@@ -120,13 +123,16 @@ cmd_account() {
         if [ "$(current_mode)" = fable ]; then as_user "$CS" switch --strategy best --model Fable
         else as_user "$CS" switch --strategy best; fi
       else as_user "$CS" switch "$1"; fi ;;
-    login)
-      [ -n "${2:-}" ] || die "which account? factory claude account login <N>"
-      [ -t 0 ] || die "login needs a terminal"
+    auth)
+      [ -n "${2:-}" ] || die "which account? factory claude account auth <N>"
+      [ -t 0 ] || die "auth needs a terminal"
       as_user "$CS" switch "$2" >/dev/null
       as_user "$CLAUDE" auth login
       as_user "$CS" add
       as_user "$CS" switch --strategy best --model "$( [ "$(current_mode)" = fable ] && echo Fable || echo none )" | tail -1 ;;
+    disable|enable)
+      [ -n "${2:-}" ] || die "which account? factory claude account $1 <N|email>"
+      as_user "$CS" "$1" "$2" ;;
     -h|--help|"") help_account ;;
     *) die "unknown account command '$1' (see factory claude account --help)" ;;
   esac
@@ -242,11 +248,14 @@ cmd_update() {
   accounts="no accounts"
   local json
   if json=$(as_user "$CS" list --json 2>/dev/null) && jq -e '.accounts' <<<"$json" >/dev/null 2>&1; then
-    local total ok
-    total=$(jq '.accounts | length' <<<"$json")
-    ok=$(jq '[.accounts[] | select(.usageStatus == "ok")] | length' <<<"$json")
+    # a disabled account is held out of rotation and may be signed out on purpose
+    local total ok disabled
+    total=$(jq '[.accounts[] | select(.disabled != true)] | length' <<<"$json")
+    ok=$(jq '[.accounts[] | select(.disabled != true and .usageStatus == "ok")] | length' <<<"$json")
+    disabled=$(jq '[.accounts[] | select(.disabled == true)] | length' <<<"$json")
     accounts="$ok of $total accounts read usage"
-    [ "$ok" = "$total" ] || problems+=("$accounts: $(jq -r '[.accounts[] | select(.usageStatus != "ok") | "\(.number) \(.usageStatus)"] | join(", ")' <<<"$json")")
+    [ "$disabled" = 0 ] || accounts+=" ($disabled disabled)"
+    [ "$ok" = "$total" ] || problems+=("$accounts: $(jq -r '[.accounts[] | select(.disabled != true and .usageStatus != "ok") | "\(.number) \(.usageStatus)"] | join(", ")' <<<"$json")")
   else
     problems+=("$step failed after the update")
   fi

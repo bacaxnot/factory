@@ -148,7 +148,9 @@ factory status                         # mode, active account, services, session
 factory claude account list            # every account with its 5h, weekly and Fable usage
 factory claude account switch          # rotate to the account with the most headroom
 factory claude account switch 2        # make account 2 active
-factory claude account login 2         # re-login account 2 after its token expired
+factory claude account auth 2          # log account 2 in again after its token expired
+factory claude account disable 2       # hold account 2 out of rotation, keeping its slot
+factory claude account enable 2        # return it to rotation
 factory claude mode                    # show the rotation mode
 factory claude mode any                # rotate on the 5h and weekly windows only
 factory claude mode fable              # also rotate on the Fable window; skip accounts whose Fable is spent
@@ -194,6 +196,8 @@ They connect as the same user as everyone else, with the same tmux and the same 
 - `fable` (default): the 5-hour, weekly, and Fable weekly windows all count, and rotation never lands on an account whose Fable usage is spent.
 - `any`: only the 5-hour and weekly windows count. Use it when working with other models.
 
+A disabled account keeps its slot and its credentials, but rotation never picks it, and the alerts and the weekly update skip it, so an account without a paid plan can sit signed out. Bringing it back is `factory claude account auth <N>` if its token has died, then `factory claude account enable <N>`.
+
 A forced `switch <N>` holds until the rotation decides otherwise. In `fable` mode, landing on an account with Fable at 100 percent is undone within a minute; set `mode any` first if that is what you want.
 
 ## Alerts
@@ -201,7 +205,7 @@ A forced `switch <N>` holds until the rotation decides otherwise. In `fable` mod
 `factory-alerts` runs every 5 minutes and pushes to `https://ntfy.sh/<NTFY_TOPIC>` when:
 
 - `cswap-auto` is down,
-- an account's login is broken (its usage status is neither `ok` nor `unavailable`),
+- an account's login is broken (its usage status is neither `ok` nor `unavailable`); a disabled account is not checked,
 - every account is out of Fable usage and the mode is `fable`; the note carries the earliest reset.
 
 A new problem is pushed at once; an unchanged one is repeated every six hours; "all clear" is pushed when the problems are gone. A usage figure that is temporarily unreadable is not an alert; the last known figure stands in for it.
@@ -213,7 +217,7 @@ A new problem is pushed at once; an unchanged one is repeated every six hours; "
 1. pulls the repo checkout named by `FACTORY_REPO`,
 2. re-runs `install.sh`,
 3. runs `claude update` and `cswap upgrade` as the shared user,
-4. verifies that `cswap list --json` reads usage for every account,
+4. verifies that `cswap list --json` reads usage for every account that is not disabled,
 5. runs `bun run worktrees:sweep` in every directory under `~/work` whose `package.json` has that script,
 6. pushes a note with the Claude Code and claude-swap versions before and after, the account check, and the disk used under `~/work`.
 
