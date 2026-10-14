@@ -33,7 +33,7 @@ if [ -n "${json:-}" ]; then
   while IFS=$'\t' read -r n email status; do
     # ok, a temporarily unreadable figure, and an access token waiting for its next use to refresh
     # are all fine. A dead refresh token, missing credentials, or a credential that belongs to
-    # another account need a person: `factory claude account auth <N>`.
+    # another account need a person: `factory claude account login <N>`.
     case "$status" in
       ok|unavailable|token_expired) ;;
       *) problems+=("account $n ($email) needs attention: $status") ;;

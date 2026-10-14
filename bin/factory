@@ -72,7 +72,7 @@ usage: factory claude account <command> [args]
   list                      every account with its 5h, weekly and Fable usage
   switch                    rotate to the account with the most headroom
   switch <N|email>          make that account active for every session on the box
-  auth <N>                  log an account in again after its token expired (needs a
+  login <N>                 log an account in again after its token expired (needs a
                             terminal; prints a URL to open, then asks for the code)
   disable <N|email>         hold an account out of rotation, keeping its slot; alerts and
                             the weekly update stop checking it
@@ -124,15 +124,15 @@ cmd_account() {
         if [ "$(current_mode)" = fable ]; then as_user "$CS" switch --strategy best --model Fable
         else as_user "$CS" switch --strategy best; fi
       else as_user "$CS" switch "$1"; fi ;;
-    auth)
-      [ -n "${2:-}" ] || die "which account? factory claude account auth <N>"
-      account_auth "$2" ;;
+    login)
+      [ -n "${2:-}" ] || die "which account? factory claude account login <N>"
+      account_login "$2" ;;
     enable)
       [ -n "${2:-}" ] || die "which account? factory claude account enable <N|email>"
       # a disabled account may have been left signed out; log it in before it rejoins rotation
-      if account_needs_auth "$2"; then
+      if account_needs_login "$2"; then
         echo "account $2 needs to log in again before it rejoins rotation"
-        account_auth "$2"
+        account_login "$2"
       fi
       as_user "$CS" enable "$2" ;;
     disable)
@@ -143,7 +143,7 @@ cmd_account() {
   esac
 }
 
-account_auth() {
+account_login() {
   [ -t 0 ] || die "logging in needs a terminal"
   as_user "$CS" switch "$1" >/dev/null
   as_user "$CLAUDE" auth login
@@ -153,7 +153,7 @@ account_auth() {
 
 # the same statuses factory-alerts treats as fine: ok, a temporarily unreadable figure, and an
 # access token that refreshes on its next use. Anything else needs a fresh login.
-account_needs_auth() {
+account_needs_login() {
   local status
   status=$(as_user "$CS" list --json 2>/dev/null | jq -r --arg a "$1" \
     '.accounts[] | select((.number | tostring) == $a or .email == $a) | .usageStatus') \

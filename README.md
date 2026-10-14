@@ -148,7 +148,7 @@ factory status                         # mode, active account, services, session
 factory claude account list            # every account with its 5h, weekly and Fable usage
 factory claude account switch          # rotate to the account with the most headroom
 factory claude account switch 2        # make account 2 active
-factory claude account auth 2          # log account 2 in again after its token expired
+factory claude account login 2         # log account 2 in again after its token expired
 factory claude account disable 2       # hold account 2 out of rotation, keeping its slot
 factory claude account enable 2        # return it to rotation, logging it in first if it needs it
 factory claude mode                    # show the rotation mode
