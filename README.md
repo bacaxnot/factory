@@ -150,7 +150,7 @@ factory claude account switch          # rotate to the account with the most hea
 factory claude account switch 2        # make account 2 active
 factory claude account auth 2          # log account 2 in again after its token expired
 factory claude account disable 2       # hold account 2 out of rotation, keeping its slot
-factory claude account enable 2        # return it to rotation
+factory claude account enable 2        # return it to rotation, logging it in first if it needs it
 factory claude mode                    # show the rotation mode
 factory claude mode any                # rotate on the 5h and weekly windows only
 factory claude mode fable              # also rotate on the Fable window; skip accounts whose Fable is spent
@@ -196,7 +196,7 @@ They connect as the same user as everyone else, with the same tmux and the same 
 - `fable` (default): the 5-hour, weekly, and Fable weekly windows all count, and rotation never lands on an account whose Fable usage is spent.
 - `any`: only the 5-hour and weekly windows count. Use it when working with other models.
 
-A disabled account keeps its slot and its credentials, but rotation never picks it, and the alerts and the weekly update skip it, so an account without a paid plan can sit signed out. Bringing it back is `factory claude account auth <N>` if its token has died, then `factory claude account enable <N>`.
+A disabled account keeps its slot and its credentials, but rotation never picks it, and the alerts and the weekly update skip it, so an account without a paid plan can sit signed out. `factory claude account enable <N>` brings it back, and when its token has died it runs the login first.
 
 A forced `switch <N>` holds until the rotation decides otherwise. In `fable` mode, landing on an account with Fable at 100 percent is undone within a minute; set `mode any` first if that is what you want.
 

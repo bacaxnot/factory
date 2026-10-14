@@ -76,7 +76,8 @@ usage: factory claude account <command> [args]
                             terminal; prints a URL to open, then asks for the code)
   disable <N|email>         hold an account out of rotation, keeping its slot; alerts and
                             the weekly update stop checking it
-  enable <N|email>          return a disabled account to rotation
+  enable <N|email>          return a disabled account to rotation, logging it in first
+                            when its token has expired
 
 A forced switch holds until the rotation service decides otherwise: in fable
 mode, landing on an account with Fable at 100% is undone within a minute.
@@ -125,17 +126,40 @@ cmd_account() {
       else as_user "$CS" switch "$1"; fi ;;
     auth)
       [ -n "${2:-}" ] || die "which account? factory claude account auth <N>"
-      [ -t 0 ] || die "auth needs a terminal"
-      as_user "$CS" switch "$2" >/dev/null
-      as_user "$CLAUDE" auth login
-      as_user "$CS" add
-      as_user "$CS" switch --strategy best --model "$( [ "$(current_mode)" = fable ] && echo Fable || echo none )" | tail -1 ;;
-    disable|enable)
-      [ -n "${2:-}" ] || die "which account? factory claude account $1 <N|email>"
-      as_user "$CS" "$1" "$2" ;;
+      account_auth "$2" ;;
+    enable)
+      [ -n "${2:-}" ] || die "which account? factory claude account enable <N|email>"
+      # a disabled account may have been left signed out; log it in before it rejoins rotation
+      if account_needs_auth "$2"; then
+        echo "account $2 needs to log in again before it rejoins rotation"
+        account_auth "$2"
+      fi
+      as_user "$CS" enable "$2" ;;
+    disable)
+      [ -n "${2:-}" ] || die "which account? factory claude account disable <N|email>"
+      as_user "$CS" disable "$2" ;;
     -h|--help|"") help_account ;;
     *) die "unknown account command '$1' (see factory claude account --help)" ;;
   esac
+}
+
+account_auth() {
+  [ -t 0 ] || die "logging in needs a terminal"
+  as_user "$CS" switch "$1" >/dev/null
+  as_user "$CLAUDE" auth login
+  as_user "$CS" add
+  as_user "$CS" switch --strategy best --model "$( [ "$(current_mode)" = fable ] && echo Fable || echo none )" | tail -1
+}
+
+# the same statuses factory-alerts treats as fine: ok, a temporarily unreadable figure, and an
+# access token that refreshes on its next use. Anything else needs a fresh login.
+account_needs_auth() {
+  local status
+  status=$(as_user "$CS" list --json 2>/dev/null | jq -r --arg a "$1" \
+    '.accounts[] | select((.number | tostring) == $a or .email == $a) | .usageStatus') \
+    || die "cswap list failed"
+  [ -n "$status" ] || die "no account $1 (see factory claude account list)"
+  case "$status" in ok|unavailable|token_expired) return 1 ;; *) return 0 ;; esac
 }
 
 AUTHORIZED_KEYS="$FACTORY_HOME/.ssh/authorized_keys"
